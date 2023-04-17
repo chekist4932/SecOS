@@ -2,17 +2,6 @@ import hashlib
 import math
 import struct
 
-# word_a = bytearray(b'\x67\x45\x23\x01')
-# word_b = bytearray(b'\xEF\xCD\xAB\x89')
-# word_c = bytearray(b'\x98\xBA\xDC\xFE')
-# word_d = bytearray(b'\x10\x32\x54\x76')
-
-
-# word_a = bytearray(b'\x01\x23\x45\x67')
-# word_b = bytearray(b'\x89\xab\xcd\xef')
-# word_c = bytearray(b'\xfe\xdc\xba\x98')
-# word_d = bytearray(b'\x76\x54\x32\x10')
-
 s_vals = {"round1": [3, 7, 11, 19],
           "round2": [3, 5, 9, 13],
           "round3": [3, 9, 11, 15]}
@@ -21,90 +10,94 @@ s_vals = {"round1": [3, 7, 11, 19],
 class MD4:
     def __init__(self, bytes_mess: bytes) -> None:
 
-        self.word_a = 0x67452301
-        self.word_b = 0xEFCDAB89
-        self.word_c = 0x98BADCFE
-        self.word_d = 0x10325476
+        self.constants = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476]
 
         self.len_msg: int = len(bytes_mess)  # len in bytes
 
         # len = 448 mod 512 / Заполнение сообщения
-        self.msg = bytes_mess + b"\x80" + (b"\x00" * ((56 - self.len_msg - 1) % 64))
+        padding_len = (56 - self.len_msg - 1) % 64
+        self.msg = bytes_mess + b"\x80" + (b"\x00" * padding_len)
         self.msg += struct.pack("<Q", self.len_msg * 8)
 
-
     def hash(self):
-        for msg_bl in [self.msg[x: x + 64] for x in range(0, len(self.msg), 64)]:
-            msg_blocks = list(struct.unpack("<16I", msg_bl))
+        const = self.constants.copy()
+        for msg_blocks in [self.msg[x: x + 64] for x in range(0, len(self.msg), 64)]:
 
-            word_aa = self.word_a
-            word_bb = self.word_b
-            word_cc = self.word_c
-            word_dd = self.word_d
+            word_blocks = list(struct.unpack("<16I", msg_blocks))
+
+            A = const[0]
+            B = const[1]
+            C = const[2]
+            D = const[3]
 
             for k in range(16):
                 if k % 4 == 0:
-                    value = word_aa + self.func_f(word_bb, word_cc, word_dd) + msg_blocks[k]
+                    value = A + self.func_f(B, C, D) + word_blocks[k]
                     value %= pow(2, 32)
-                    word_aa = self.shift_rotate_to_left(value, s_vals['round1'][0])
+                    A = self.shift_rotate_to_left(value, s_vals['round1'][k % 4])
                 elif k % 4 == 1:
-                    value = word_dd + self.func_f(word_aa, word_bb, word_cc) + msg_blocks[k]
+                    value = D + self.func_f(A, B, C) + word_blocks[k]
                     value %= pow(2, 32)
-                    word_dd = self.shift_rotate_to_left(value, s_vals['round1'][1])
+                    D = self.shift_rotate_to_left(value, s_vals['round1'][k % 4])
                 elif k % 4 == 2:
-                    value = word_cc + self.func_f(word_dd, word_aa, word_bb) + msg_blocks[k]
+                    value = C + self.func_f(D, A, B) + word_blocks[k]
                     value %= pow(2, 32)
-                    word_cc = self.shift_rotate_to_left(value, s_vals['round1'][2])
+                    C = self.shift_rotate_to_left(value, s_vals['round1'][k % 4])
                 else:
-                    value = word_bb + self.func_f(word_cc, word_dd, word_aa) + msg_blocks[k]
+                    value = B + self.func_f(C, D, A) + word_blocks[k]
                     value %= pow(2, 32)
-                    word_bb = self.shift_rotate_to_left(value, s_vals['round1'][3])
+                    B = self.shift_rotate_to_left(value, s_vals['round1'][k % 4])
+
             const_vector = 0x5A827999
             for k in [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15]:
 
                 if 0 <= k <= 3:
-                    value = word_aa + self.func_g(word_bb, word_cc, word_dd) + msg_blocks[k] + const_vector
+                    value = A + self.func_g(B, C, D) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_aa = self.shift_rotate_to_left(value, s_vals["round2"][0])
+                    A = self.shift_rotate_to_left(value, s_vals["round2"][0])
                 elif 4 <= k <= 7:
-                    value = word_dd + self.func_g(word_aa, word_bb, word_cc) + msg_blocks[k] + const_vector
+                    value = D + self.func_g(A, B, C) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_dd = self.shift_rotate_to_left(value, s_vals["round2"][1])
+                    D = self.shift_rotate_to_left(value, s_vals["round2"][1])
                 elif 8 <= k <= 11:
-                    value = word_cc + self.func_g(word_dd, word_aa, word_bb) + msg_blocks[k] + const_vector
+                    value = C + self.func_g(D, A, B) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_cc = self.shift_rotate_to_left(value, s_vals["round2"][2])
+                    C = self.shift_rotate_to_left(value, s_vals["round2"][2])
                 else:
-                    value = word_bb + self.func_g(word_cc, word_dd, word_aa) + msg_blocks[k] + const_vector
+                    value = B + self.func_g(C, D, A) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_bb = self.shift_rotate_to_left(value, s_vals["round2"][3])
+                    B = self.shift_rotate_to_left(value, s_vals["round2"][3])
 
             const_vector = 0x6ED9EBA1
             for k in [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]:
                 if 0 <= k <= 3:
-                    value = word_aa + self.func_h(word_bb, word_cc, word_dd) + msg_blocks[k] + const_vector
+                    value = A + self.func_h(B, C, D) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_aa = self.shift_rotate_to_left(value, s_vals["round3"][0])
+                    A = self.shift_rotate_to_left(value, s_vals["round3"][0])
                 elif 4 <= k <= 7:
-                    value = word_cc + self.func_h(word_dd, word_aa, word_bb) + msg_blocks[k] + const_vector
+                    value = C + self.func_h(D, A, B) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_cc = self.shift_rotate_to_left(value, s_vals["round3"][2])
+                    C = self.shift_rotate_to_left(value, s_vals["round3"][2])
                 elif 8 <= k <= 11:
-                    value = word_dd + self.func_h(word_aa, word_bb, word_cc) + msg_blocks[k] + const_vector
+                    value = D + self.func_h(A, B, C) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_dd = self.shift_rotate_to_left(value, s_vals["round3"][1])
+                    D = self.shift_rotate_to_left(value, s_vals["round3"][1])
                 else:
-                    value = word_bb + self.func_h(word_cc, word_dd, word_aa) + msg_blocks[k] + const_vector
+                    value = B + self.func_h(C, D, A) + word_blocks[k] + const_vector
                     value %= pow(2, 32)
-                    word_bb = self.shift_rotate_to_left(value, s_vals["round3"][3])
+                    B = self.shift_rotate_to_left(value, s_vals["round3"][3])
 
-            self.word_a = (self.word_a + word_aa) % pow(2, 32)
-            self.word_b = (self.word_b + word_bb) % pow(2, 32)
-            self.word_c = (self.word_c + word_cc) % pow(2, 32)
-            self.word_d = (self.word_d + word_dd) % pow(2, 32)
+            const[0] = (const[0] + A) % pow(2, 32)
+            const[1] = (const[1] + B) % pow(2, 32)
+            const[2] = (const[2] + C) % pow(2, 32)
+            const[3] = (const[3] + D) % pow(2, 32)
 
-        hash_ = struct.pack("<4L", *[self.word_a, self.word_b, self.word_c, self.word_d])
+        hash_ = struct.pack("<4L", *const)
         return hash_
+
+    @staticmethod
+    def round_one(A: int, B: int, C: int, D: int):
+        return None
 
     @staticmethod
     def func_f(x_word: int, y_word: int, z_word: int) -> int:
@@ -132,6 +125,8 @@ class MD4:
 text = ''
 msg = text.encode('utf-8')
 
+hasher = MD4(msg)
+
 hashObject = hashlib.new('md4', msg).hexdigest()
 print(f"Hashlib -- {hashObject}")
-print(f'My hash -- {MD4(msg).hash().hex()}')
+print(f'My hash -- {hasher.hash().hex()}')
